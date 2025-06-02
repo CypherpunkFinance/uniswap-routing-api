@@ -8,12 +8,10 @@ import {
   CachingV4PoolProvider,
   EIP1559GasPriceProvider,
   EthEstimateGasSimulator,
-  FallbackTenderlySimulator,
   getApplicableV4FeesTickspacingsHooks,
   IGasPriceProvider,
   IMetric,
   IOnChainQuoteProvider,
-  IRouteCachingProvider,
   ITokenListProvider,
   ITokenPropertiesProvider,
   ITokenProvider,
@@ -26,7 +24,6 @@ import {
   LegacyGasPriceProvider,
   MIXED_ROUTE_QUOTER_V1_ADDRESSES,
   MIXED_ROUTE_QUOTER_V2_ADDRESSES,
-  NEW_QUOTER_V2_ADDRESSES,
   NodeJSCache,
   OnChainGasPriceProvider,
   OnChainQuoteProvider,
@@ -37,7 +34,6 @@ import {
   StaticV2SubgraphProvider,
   StaticV3SubgraphProvider,
   StaticV4SubgraphProvider,
-  TenderlySimulator,
   TokenPropertiesProvider,
   TokenProvider,
   TokenValidatorProvider,
@@ -52,7 +48,7 @@ import { default as bunyan, default as Logger } from 'bunyan'
 import _ from 'lodash'
 import NodeCache from 'node-cache'
 import UNSUPPORTED_TOKEN_LIST from './../config/unsupported.tokenlist.json'
-import { BaseRInj, Injector } from './handler'
+import { BaseRInj, Injector } from './local-handler'
 import { DefaultEVMClient } from './evm/EVMClient'
 import { InstrumentedEVMProvider } from './evm/provider/InstrumentedEVMProvider'
 import { deriveProviderName } from './evm/provider/ProviderName'
@@ -67,15 +63,13 @@ import {
   RETRY_OPTIONS,
   SUCCESS_RATE_FAILURE_OVERRIDES,
 } from '../util/onChainQuoteProviderConfigs'
-import { v4 } from 'uuid/index'
-import { chainProtocols } from '../cron/cache-config'
+import { v4 } from 'uuid'
 import { Protocol } from '@uniswap/router-sdk'
 import {
   emptyV4FeeTickSpacingsHookAddresses,
   EXTRA_V4_FEE_TICK_SPACINGS_HOOK_ADDRESSES,
 } from '../util/extraV4FeeTiersTickSpacingsHookAddresses'
 import { SQLiteDatabase } from '../database/sqlite-database'
-import { LocalRouteCachingProvider, LocalV3PoolCacheProvider, LocalV2PairCacheProvider } from './router-entities/local-cache-provider'
 
 export const SUPPORTED_CHAINS: ChainId[] = [
   ChainId.MAINNET,
@@ -131,14 +125,12 @@ export type ContainerDependencies = {
   onChainQuoteProvider?: IOnChainQuoteProvider
   v2QuoteProvider: V2QuoteProvider
   simulator: Simulator
-  routeCachingProvider?: IRouteCachingProvider
   tokenValidatorProvider: TokenValidatorProvider
   tokenPropertiesProvider: ITokenPropertiesProvider
   v2Supported: ChainId[]
   v4Supported?: ChainId[]
   mixedSupported?: ChainId[]
   v4PoolParams?: Array<[number, number, string]>
-  cachedRoutesCacheInvalidationFixRolloutPercentage?: number
 }
 
 export interface ContainerInjected {
@@ -307,9 +299,6 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
             portionProvider
           )
 
-          // Create local route caching provider
-          const routeCachingProvider = new LocalRouteCachingProvider(this.database)
-
           const v2QuoteProvider = new V2QuoteProvider()
 
           // Create gas price provider
@@ -332,7 +321,6 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
             onChainQuoteProvider: quoteProvider,
             v2QuoteProvider,
             simulator,
-            routeCachingProvider,
             tokenValidatorProvider,
             tokenPropertiesProvider,
             v2Supported: [ChainId.MAINNET, ChainId.POLYGON, ChainId.BNB],
@@ -361,13 +349,27 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
 
   private async createTokenListProvider(chainId: ChainId, tokenCache: NodeJSCache<Token>): Promise<ITokenListProvider> {
     try {
-      // Try to fetch from default URL, fallback to empty list if fails
-      const response = await fetch(DEFAULT_TOKEN_LIST)
-      const tokenList = await response.json()
-      return CachingTokenListProvider.fromTokenList(chainId, tokenList, tokenCache)
+      // Use a simple built-in token list instead of fetching
+      const basicTokenList: TokenList = {
+        name: 'Local Token List',
+        timestamp: new Date().toISOString(),
+        version: { major: 1, minor: 0, patch: 0 },
+        tokens: [],
+        keywords: [],
+        logoURI: '',
+      }
+      return CachingTokenListProvider.fromTokenList(chainId, basicTokenList, tokenCache)
     } catch (error) {
-      console.warn(`Failed to fetch token list for chain ${chainId}, using empty list`)
-      return CachingTokenListProvider.fromTokenList(chainId, { tokens: [], version: { major: 1, minor: 0, patch: 0 } }, tokenCache)
+      console.warn(`Failed to create token list for chain ${chainId}, using empty list`)
+      const emptyTokenList: TokenList = {
+        name: 'Empty Token List',
+        timestamp: new Date().toISOString(),
+        version: { major: 1, minor: 0, patch: 0 },
+        tokens: [],
+        keywords: [],
+        logoURI: '',
+      }
+      return CachingTokenListProvider.fromTokenList(chainId, emptyTokenList, tokenCache)
     }
   }
 
@@ -376,7 +378,7 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
     poolProvider: IV4PoolProvider,
     poolParams: Array<[number, number, string]>
   ): Promise<IV4SubgraphProvider> {
-    return new StaticV4SubgraphProvider(chainId, poolProvider, poolParams)
+    return new StaticV4SubgraphProvider(chainId, poolProvider)
   }
 
   private async createV3SubgraphProvider(chainId: ChainId, poolProvider: IV3PoolProvider): Promise<IV3SubgraphProvider> {

@@ -2,9 +2,8 @@ import express, { Request, Response } from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import bunyan from 'bunyan'
-import { QuoteHandler } from './lib/handlers/quote/quote'
 import { SQLiteDatabase } from './lib/database/sqlite-database'
-import { LocalQuoteHandlerInjector } from './lib/handlers/quote/local-injector'
+import { LocalQuoteHandler, LocalQuoteHandlerInjector } from './lib/handlers/quote/local-quote-handler'
 
 // Load environment variables
 dotenv.config()
@@ -27,11 +26,11 @@ app.use(express.json())
 const database = new SQLiteDatabase()
 
 // Initialize quote handler
-let quoteHandler: QuoteHandler
+let quoteHandler: LocalQuoteHandler
 async function initializeHandlers() {
   try {
     const quoteInjectorPromise = new LocalQuoteHandlerInjector('localQuoteInjector', database).build()
-    quoteHandler = new QuoteHandler('quote', quoteInjectorPromise)
+    quoteHandler = new LocalQuoteHandler('quote', quoteInjectorPromise)
     log.info('Quote handler initialized successfully')
   } catch (error) {
     log.fatal({ error }, 'Fatal error initializing handlers')
@@ -39,59 +38,8 @@ async function initializeHandlers() {
   }
 }
 
-// Simple metrics implementation for local development
-class LocalMetricsLogger {
-  putMetric(name: string, value: number, unit?: string): void {
-    log.info({ metric: name, value, unit }, 'Metric logged')
-  }
-
-  putDimensions(dimensions: Record<string, string>): void {
-    log.info({ dimensions }, 'Dimensions set')
-  }
-
-  setProperty(key: string, value: unknown): void {
-    log.info({ property: key, value }, 'Property set')
-  }
-
-  flush(): void {
-    // No-op for local development
-  }
-}
-
-// Convert Express request to Lambda-like event format
-function convertRequestToEvent(req: Request): any {
-  return {
-    httpMethod: req.method,
-    path: req.path,
-    pathParameters: req.params,
-    queryStringParameters: req.query,
-    headers: req.headers,
-    body: req.body ? JSON.stringify(req.body) : null,
-    requestContext: {
-      requestId: generateRequestId(),
-      requestTime: new Date().toISOString(),
-      httpMethod: req.method,
-    },
-  }
-}
-
-// Convert Express request to Lambda-like context format
-function convertRequestToContext(req: Request): any {
-  return {
-    awsRequestId: generateRequestId(),
-    functionName: 'routing-api-local',
-    getRemainingTimeInMillis: () => 30000, // 30 seconds
-    logGroupName: '/aws/lambda/routing-api-local',
-    logStreamName: `${new Date().toISOString().split('T')[0]}/[LATEST]${generateRequestId()}`,
-  }
-}
-
-function generateRequestId(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-}
-
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
@@ -102,17 +50,16 @@ app.get('/health', (req: Request, res: Response) => {
 // Quote endpoint
 app.get('/quote', async (req: Request, res: Response) => {
   try {
-    const event = convertRequestToEvent(req)
-    const context = convertRequestToContext(req)
+    const result = await quoteHandler.handleQuote(req.query as any)
 
-    // Call the Lambda handler
-    const result = await quoteHandler.handler(event, context)
-
-    // Parse the result
-    const parsedResult = JSON.parse(result.body)
-
-    // Set status code and return response
-    res.status(result.statusCode).json(parsedResult)
+    if ('error' in result) {
+      res.status(result.statusCode).json({
+        errorCode: 'QUOTE_ERROR',
+        detail: result.error,
+      })
+    } else {
+      res.status(200).json(result)
+    }
   } catch (error) {
     log.error({ error, req: req.query }, 'Error processing quote request')
     res.status(500).json({
@@ -123,7 +70,7 @@ app.get('/quote', async (req: Request, res: Response) => {
 })
 
 // Error handling middleware
-app.use((error: any, req: Request, res: Response, next: any) => {
+app.use((error: any, req: Request, res: Response, _next: any) => {
   log.error({ error, req: req.path }, 'Unhandled error')
   res.status(500).json({
     errorCode: 'INTERNAL_ERROR',
@@ -132,7 +79,7 @@ app.use((error: any, req: Request, res: Response, next: any) => {
 })
 
 // 404 handler
-app.use((req: Request, res: Response) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({
     errorCode: 'NOT_FOUND',
     detail: 'Endpoint not found',
