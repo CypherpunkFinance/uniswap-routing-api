@@ -373,65 +373,7 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
       return CachingTokenListProvider.fromTokenList(chainId, filteredTokenList, tokenCache)
     } catch (error) {
       console.warn(`Failed to fetch official token list for chain ${chainId}:`, error)
-      
-      // Fallback to a minimal token list with popular tokens
-      const fallbackTokens: any[] = []
-      
-      if (chainId === ChainId.MAINNET) {
-        fallbackTokens.push(
-          {
-            chainId: 1,
-            address: "0xA0b86a33E6417058256Ce9DEd69BcF4C8C02AA9B",
-            name: "Maker",
-            symbol: "MKR",
-            decimals: 18,
-            logoURI: ""
-          },
-          {
-            chainId: 1,
-            address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7",
-            name: "The Graph",
-            symbol: "GRT", 
-            decimals: 18,
-            logoURI: ""
-          },
-          {
-            chainId: 1,
-            address: "0xA0b86a33E6417058256Ce9DEd69BcF4C8C02AA9B",
-            name: "USD Coin",
-            symbol: "USDC",
-            decimals: 6,
-            logoURI: ""
-          },
-          {
-            chainId: 1,
-            address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-            name: "Wrapped Ether",
-            symbol: "WETH",
-            decimals: 18,
-            logoURI: ""
-          },
-          {
-            chainId: 1,
-            address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-            name: "Tether USD",
-            symbol: "USDT",
-            decimals: 6,
-            logoURI: ""
-          }
-        )
-      }
-
-      const fallbackTokenList: TokenList = {
-        name: 'Fallback Token List',
-        timestamp: new Date().toISOString(),
-        version: { major: 1, minor: 0, patch: 0 },
-        tokens: fallbackTokens,
-        keywords: [],
-        logoURI: '',
-      }
-      
-      return CachingTokenListProvider.fromTokenList(chainId, fallbackTokenList, tokenCache)
+      throw error
     }
   }
 

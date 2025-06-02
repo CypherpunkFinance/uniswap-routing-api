@@ -98,6 +98,22 @@ export class LocalQuoteHandler {
         deadline: deadline ? Math.floor(Date.now() / 1000) + parseInt(deadline) : Math.floor(Date.now() / 1000) + 1800, // 30 min default
       }
 
+      console.log('DEBUG: About to call router.route() with chainId:', chainId, 'type:', typeof chainId)
+
+      // WORKAROUND: Override AlphaRouter's chainId property to ensure it's numeric
+      // The Universal Router SDK expects a numeric chainId, but somehow this.chainId 
+      // in AlphaRouter can become a string, causing UNIVERSAL_ROUTER_ADDRESS lookup to fail
+      if (typeof (router as any).chainId !== 'number') {
+        const originalChainId = (router as any).chainId
+        ;(router as any).chainId = typeof originalChainId === 'string' ? parseInt(originalChainId) : chainId
+        log.info({ 
+          originalChainId, 
+          originalType: typeof originalChainId,
+          fixedChainId: (router as any).chainId,
+          fixedType: typeof (router as any).chainId 
+        }, 'Fixed AlphaRouter chainId type for Universal Router SDK compatibility')
+      }
+
       const routeResult = await router.route(
         parsedAmount,
         type === 'exactIn' ? tokenOutResult : tokenInResult,
