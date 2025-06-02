@@ -46,9 +46,9 @@ interface QuoteResponse {
 
 ;(async function () {
   const quoteParams: QuoteParams = {
-    tokenInAddress: '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2', // MKR
+    tokenInAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // MKR
     tokenInChainId: 1,
-    tokenOutAddress: '0xc944E90C64B2c07662A292be6244BDf05Cda44a7', // GRT  
+    tokenOutAddress: '0x6B175474E89094C44Da98b954EedeAC495271d0F', // GRT  
     tokenOutChainId: 1,
     amount: '50000000000000000000', // 50 tokens in wei (18 decimals)
     type: 'exactIn',

@@ -1,11 +1,12 @@
 import { ChainId } from '@uniswap/sdk-core'
-import { AlphaRouter, AlphaRouterConfig, IMetric, IRouter, MetricLoggerUnit } from '@uniswap/smart-order-router'
+import { AlphaRouter, AlphaRouterConfig, IMetric, IRouter, MetricLoggerUnit, SwapType } from '@uniswap/smart-order-router'
 import { default as bunyan, default as Logger } from 'bunyan'
 import { RequestInjected, LocalInjectorSOR } from '../local-injector-sor'
 import { QuoteQueryParams } from './schema/quote-schema'
 import { SQLiteDatabase } from '../../database/sqlite-database'
 import { QuoteResponse } from '../schema'
 import { RoutingApiSimulationStatus } from './util/simulation'
+import { UniversalRouterVersion } from '@uniswap/universal-router-sdk'
 
 export class LocalQuoteHandler {
   constructor(
@@ -92,7 +93,8 @@ export class LocalQuoteHandler {
 
       // Call the router with swap options
       const swapOptions = {
-        type: 0, // SwapRouter02
+        type: SwapType.UNIVERSAL_ROUTER,
+        version: UniversalRouterVersion.V1_2,
         recipient: recipient || '0x0000000000000000000000000000000000000000',
         slippageTolerance: slippageTolerance ? new Percent(parseInt(slippageTolerance), 10000) : new Percent(50, 10000), // 0.5% default
         deadline: deadline ? Math.floor(Date.now() / 1000) + parseInt(deadline) : Math.floor(Date.now() / 1000) + 1800, // 30 min default
@@ -112,6 +114,21 @@ export class LocalQuoteHandler {
           fixedChainId: (router as any).chainId,
           fixedType: typeof (router as any).chainId 
         }, 'Fixed AlphaRouter chainId type for Universal Router SDK compatibility')
+      }
+
+      // Additional safety check: ensure all chainId properties are consistent
+      console.log('DEBUG: Final chainId check before routing:', {
+        localChainId: chainId,
+        localChainIdType: typeof chainId,
+        routerChainId: (router as any).chainId,
+        routerChainIdType: typeof (router as any).chainId,
+        swapOptionsType: swapOptions.type
+      })
+
+      // Ensure chainId is numeric and available
+      const numericChainId = typeof chainId === 'string' ? parseInt(chainId) : chainId
+      if (typeof numericChainId !== 'number' || isNaN(numericChainId)) {
+        throw new Error(`Invalid chainId for routing: ${chainId}`)
       }
 
       const routeResult = await router.route(
@@ -278,13 +295,18 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
     // Use tokenInChainId if provided, otherwise fall back to tokenOutChainId, otherwise default to mainnet
     // Convert to number since URL query params are strings but AlphaRouter expects numbers
     const rawChainId = tokenInChainId || tokenOutChainId || ChainId.MAINNET
-    let chainId: ChainId = Number(rawChainId)
+    let chainId: ChainId = typeof rawChainId === 'string' ? parseInt(rawChainId) : Number(rawChainId)
+    
+    // Ensure chainId is always a number to prevent Universal Router address lookup issues
+    if (typeof chainId !== 'number' || isNaN(chainId)) {
+      throw new Error(`Invalid chainId: ${rawChainId}. Must be a valid number.`)
+    }
     
     log.info({ 
       rawChainId, 
       chainId, 
       type: typeof chainId 
-    }, 'Chain ID conversion')
+    }, 'Chain ID conversion - ensured numeric')
 
     // Debug logging to see what chains are loaded
     const loadedChains = Object.keys(containerInjected.dependencies).filter(
@@ -321,8 +343,20 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
     // Create router
     log.info({ chainId, hasProvider: !!dependencies.provider }, 'Creating AlphaRouter')
     
+    // Ensure chainId is numeric before passing to AlphaRouter
+    const numericChainId = typeof chainId === 'string' ? parseInt(chainId) : chainId
+    if (typeof numericChainId !== 'number' || isNaN(numericChainId)) {
+      throw new Error(`Invalid chainId for AlphaRouter creation: ${chainId}`)
+    }
+    
+    log.info({ 
+      originalChainId: chainId, 
+      numericChainId, 
+      chainIdType: typeof numericChainId 
+    }, 'ChainId conversion for AlphaRouter')
+    
     const router = new AlphaRouter({
-      chainId,
+      chainId: numericChainId,
       provider: dependencies.provider,
       multicall2Provider: dependencies.multicallProvider,
       v3PoolProvider: dependencies.v3PoolProvider,
@@ -348,7 +382,7 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
       log: log.child({ requestId }),
       metric,
       router,
-      chainId,
+      chainId: numericChainId, // Return the numeric chainId
       v4PoolProvider: dependencies.v4PoolProvider,
       v3PoolProvider: dependencies.v3PoolProvider,
       v2PoolProvider: dependencies.v2PoolProvider,

@@ -120,9 +120,9 @@ export const OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol in Protocol]: { 
       quoteMinSuccessRate: 0.15,
     },
     [ChainId.MAINNET]: {
-      multicallChunk: 1974,
+      multicallChunk: 25,
       gasLimitPerCall: 75_000,
-      quoteMinSuccessRate: 0.15,
+      quoteMinSuccessRate: 0.02,
     },
     [ChainId.ZKSYNC]: {
       multicallChunk: 20,
@@ -208,9 +208,9 @@ export const OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol in Protocol]: { 
       quoteMinSuccessRate: 0.15,
     },
     [ChainId.MAINNET]: {
-      multicallChunk: 1974,
+      multicallChunk: 25,
       gasLimitPerCall: 75_000,
-      quoteMinSuccessRate: 0.15,
+      quoteMinSuccessRate: 0.02,
     },
     [ChainId.ZKSYNC]: {
       multicallChunk: 20,
@@ -297,9 +297,9 @@ export const OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol in Protocol]: { 
       quoteMinSuccessRate: 0.15,
     },
     [ChainId.MAINNET]: {
-      multicallChunk: 1974,
+      multicallChunk: 25,
       gasLimitPerCall: 75_000,
-      quoteMinSuccessRate: 0.15,
+      quoteMinSuccessRate: 0.02,
     },
     [ChainId.ZKSYNC]: {
       multicallChunk: 20,
@@ -562,9 +562,9 @@ export const NON_OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol in Protocol]
         quoteMinSuccessRate: 0.15,
       },
       [ChainId.MAINNET]: {
-        multicallChunk: 987,
-        gasLimitPerCall: 150_000,
-        quoteMinSuccessRate: 0.15,
+        multicallChunk: 25,
+        gasLimitPerCall: 75_000,
+        quoteMinSuccessRate: 0.02,
       },
       [ChainId.ZKSYNC]: {
         multicallChunk: 20,
@@ -651,9 +651,9 @@ export const NON_OPTIMISTIC_CACHED_ROUTES_BATCH_PARAMS: { [protocol in Protocol]
         quoteMinSuccessRate: 0.15,
       },
       [ChainId.MAINNET]: {
-        multicallChunk: 987,
-        gasLimitPerCall: 150_000,
-        quoteMinSuccessRate: 0.15,
+        multicallChunk: 25,
+        gasLimitPerCall: 75_000,
+        quoteMinSuccessRate: 0.02,
       },
       [ChainId.ZKSYNC]: {
         multicallChunk: 20,
