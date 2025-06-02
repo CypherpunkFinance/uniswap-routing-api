@@ -46,7 +46,7 @@ interface QuoteResponse {
 
 ;(async function () {
   const quoteParams: QuoteParams = {
-    tokenInAddress: '0xA0b86a33E6417058256Ce9DEd69BcF4C8C02AA9B', // MKR
+    tokenInAddress: '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2', // MKR
     tokenInChainId: 1,
     tokenOutAddress: '0xc944E90C64B2c07662A292be6244BDf05Cda44a7', // GRT  
     tokenOutChainId: 1,

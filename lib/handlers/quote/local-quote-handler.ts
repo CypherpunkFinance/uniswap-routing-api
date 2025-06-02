@@ -34,7 +34,7 @@ export class LocalQuoteHandler {
     try {
       log.info('Starting quote request processing')
       
-      await injector.getRequestInjected(
+      const requestInjected = await injector.getRequestInjected(
         containerInjected,
         undefined,
         queryParams,
@@ -44,30 +44,174 @@ export class LocalQuoteHandler {
         mockMetrics
       )
 
-      log.info('Request injected successfully, returning mock response')
+      log.info('Request injected successfully, calling AlphaRouter')
       
-      // Here you would implement the actual quote logic
-      // For now, return a basic structure
-      return {
+      const { router, chainId, tokenProvider } = requestInjected
+      const { 
+        tokenInAddress, 
+        tokenOutAddress, 
+        amount, 
+        type,
+        recipient,
+        slippageTolerance,
+        deadline
+      } = queryParams
+
+      // Get tokens from the token provider
+      log.info({ tokenInAddress, tokenOutAddress }, 'Fetching tokens')
+      const [tokenIn, tokenOut] = await Promise.all([
+        tokenProvider.getTokens([tokenInAddress]),
+        tokenProvider.getTokens([tokenOutAddress])
+      ])
+
+      const tokenInResult = tokenIn.getTokenByAddress(tokenInAddress)
+      const tokenOutResult = tokenOut.getTokenByAddress(tokenOutAddress)
+
+      if (!tokenInResult || !tokenOutResult) {
+        throw new Error(`Could not fetch token info. TokenIn: ${!!tokenInResult}, TokenOut: ${!!tokenOutResult}`)
+      }
+
+      log.info({ 
+        tokenIn: { symbol: tokenInResult.symbol, decimals: tokenInResult.decimals },
+        tokenOut: { symbol: tokenOutResult.symbol, decimals: tokenOutResult.decimals }
+      }, 'Tokens fetched successfully')
+
+      // Parse amount and trade type
+      const { CurrencyAmount, TradeType, Percent } = await import('@uniswap/sdk-core')
+      const parsedAmount = CurrencyAmount.fromRawAmount(
+        type === 'exactIn' ? tokenInResult : tokenOutResult,
+        amount
+      )
+      const tradeType = type === 'exactIn' ? TradeType.EXACT_INPUT : TradeType.EXACT_OUTPUT
+
+      log.info({ 
+        amount: parsedAmount.toExact(),
+        tradeType: type,
+        chainId 
+      }, 'Calling router.route()')
+
+      // Call the router with swap options
+      const swapOptions = {
+        type: 0, // SwapRouter02
+        recipient: recipient || '0x0000000000000000000000000000000000000000',
+        slippageTolerance: slippageTolerance ? new Percent(parseInt(slippageTolerance), 10000) : new Percent(50, 10000), // 0.5% default
+        deadline: deadline ? Math.floor(Date.now() / 1000) + parseInt(deadline) : Math.floor(Date.now() / 1000) + 1800, // 30 min default
+      }
+
+      const routeResult = await router.route(
+        parsedAmount,
+        type === 'exactIn' ? tokenOutResult : tokenInResult,
+        tradeType,
+        swapOptions
+      )
+
+      if (!routeResult) {
+        throw new Error('No route found')
+      }
+
+      log.info({ 
+        quote: routeResult.quote.toExact(),
+        gasEstimate: routeResult.estimatedGasUsed?.toString()
+      }, 'Route found successfully')
+
+      // Convert route information to the proper format
+      const convertRouteToResponse = (route: any[]): any[] => {
+        return route.map(routeWithValidQuote => {
+          return routeWithValidQuote.route.pools.map((pool: any) => {
+            const poolType = pool.fee ? 'v3-pool' : 'v2-pool'
+            
+            if (poolType === 'v3-pool') {
+              return {
+                type: 'v3-pool',
+                address: pool.address || '',
+                tokenIn: {
+                  address: pool.token0.address,
+                  chainId: pool.token0.chainId,
+                  symbol: pool.token0.symbol || '',
+                  decimals: pool.token0.decimals.toString(),
+                },
+                tokenOut: {
+                  address: pool.token1.address,
+                  chainId: pool.token1.chainId,
+                  symbol: pool.token1.symbol || '',
+                  decimals: pool.token1.decimals.toString(),
+                },
+                sqrtRatioX96: pool.sqrtRatioX96?.toString() || '0',
+                liquidity: pool.liquidity?.toString() || '0',
+                tickCurrent: pool.tickCurrent?.toString() || '0',
+                fee: pool.fee?.toString() || '0',
+              }
+            } else {
+              return {
+                type: 'v2-pool',
+                address: pool.address || '',
+                tokenIn: {
+                  address: pool.token0.address,
+                  chainId: pool.token0.chainId,
+                  symbol: pool.token0.symbol || '',
+                  decimals: pool.token0.decimals.toString(),
+                },
+                tokenOut: {
+                  address: pool.token1.address,
+                  chainId: pool.token1.chainId,
+                  symbol: pool.token1.symbol || '',
+                  decimals: pool.token1.decimals.toString(),
+                },
+                reserve0: {
+                  token: {
+                    address: pool.token0.address,
+                    chainId: pool.token0.chainId,
+                    symbol: pool.token0.symbol || '',
+                    decimals: pool.token0.decimals.toString(),
+                  },
+                  quotient: pool.reserve0?.toString() || '0'
+                },
+                reserve1: {
+                  token: {
+                    address: pool.token1.address,
+                    chainId: pool.token1.chainId,
+                    symbol: pool.token1.symbol || '',
+                    decimals: pool.token1.decimals.toString(),
+                  },
+                  quotient: pool.reserve1?.toString() || '0'
+                }
+              }
+            }
+          })
+        })
+      }
+
+      // Format the response
+      const response: QuoteResponse = {
         quoteId: Math.random().toString(36),
-        amount: '0',
-        amountDecimals: '18',
-        quote: '0',
-        quoteDecimals: '18',
-        quoteGasAdjusted: '0',
-        quoteGasAdjustedDecimals: '18',
-        gasUseEstimate: '150000',
-        gasUseEstimateQuote: '0',
-        gasUseEstimateQuoteDecimals: '18',
-        gasUseEstimateUSD: '0',
-        gasPriceWei: '20000000000',
-        route: [],
-        routeString: '[]',
-        blockNumber: '0',
-        methodParameters: undefined,
+        amount: parsedAmount.quotient.toString(),
+        amountDecimals: parsedAmount.currency.decimals.toString(),
+        quote: routeResult.quote.quotient.toString(),
+        quoteDecimals: routeResult.quote.currency.decimals.toString(),
+        quoteGasAdjusted: routeResult.quoteGasAdjusted.quotient.toString(),
+        quoteGasAdjustedDecimals: routeResult.quoteGasAdjusted.currency.decimals.toString(),
+        gasUseEstimate: routeResult.estimatedGasUsed?.toString() || '150000',
+        gasUseEstimateQuote: routeResult.estimatedGasUsedQuoteToken?.quotient.toString() || '0',
+        gasUseEstimateQuoteDecimals: routeResult.estimatedGasUsedQuoteToken?.currency.decimals.toString() || '18',
+        gasUseEstimateUSD: routeResult.estimatedGasUsedUSD?.toExact() || '0',
+        gasPriceWei: routeResult.gasPriceWei?.toString() || '20000000000',
+        route: convertRouteToResponse(routeResult.route),
+        routeString: JSON.stringify(routeResult.route.map(r => ({ 
+          protocol: r.protocol, 
+          input: r.route.input.isToken ? r.route.input.address : 'ETH',
+          output: r.route.output.isToken ? r.route.output.address : 'ETH'
+        }))),
+        blockNumber: '0', // We'd need to fetch this from provider
+        methodParameters: routeResult.methodParameters ? {
+          calldata: routeResult.methodParameters.calldata,
+          value: routeResult.methodParameters.value,
+          to: routeResult.methodParameters.to,
+        } : undefined,
         hitsCachedRoutes: false,
-        simulationStatus: 'NotSupported' as RoutingApiSimulationStatus,
-      } as QuoteResponse
+        simulationStatus: RoutingApiSimulationStatus.NOT_SUPPORTED,
+      }
+
+      return response
 
     } catch (error) {
       log.error({ 
