@@ -32,6 +32,8 @@ export class LocalQuoteHandler {
     const mockMetrics = {}
 
     try {
+      log.info('Starting quote request processing')
+      
       await injector.getRequestInjected(
         containerInjected,
         undefined,
@@ -42,6 +44,8 @@ export class LocalQuoteHandler {
         mockMetrics
       )
 
+      log.info('Request injected successfully, returning mock response')
+      
       // Here you would implement the actual quote logic
       // For now, return a basic structure
       return {
@@ -66,7 +70,16 @@ export class LocalQuoteHandler {
       } as QuoteResponse
 
     } catch (error) {
-      log.error({ error }, 'Error processing quote')
+      log.error({ 
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          name: error instanceof Error ? error.name : undefined,
+          code: (error as any)?.code,
+          details: error
+        },
+        queryParams 
+      }, 'Error processing quote')
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
         statusCode: 500
@@ -103,12 +116,31 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
     }
 
     // Use tokenInChainId if provided, otherwise fall back to tokenOutChainId, otherwise default to mainnet
-    let chainId: ChainId = tokenInChainId || tokenOutChainId || ChainId.MAINNET
+    // Convert to number since URL query params are strings but AlphaRouter expects numbers
+    const rawChainId = tokenInChainId || tokenOutChainId || ChainId.MAINNET
+    let chainId: ChainId = Number(rawChainId)
+    
+    log.info({ 
+      rawChainId, 
+      chainId, 
+      type: typeof chainId 
+    }, 'Chain ID conversion')
 
-    if (!containerInjected.dependencies[chainId]) {
-      // If the requested chain is not supported, fall back to mainnet
-      log.warn({ requestedChainId: chainId }, 'Chain not supported, falling back to mainnet')
-      chainId = ChainId.MAINNET
+    // Debug logging to see what chains are loaded
+    const loadedChains = Object.keys(containerInjected.dependencies).filter(
+      (cId) => containerInjected.dependencies[parseInt(cId)] && containerInjected.dependencies[parseInt(cId)].provider
+    )
+    log.info({ 
+      requestedChainId: chainId, 
+      loadedChains, 
+      hasChainDeps: !!containerInjected.dependencies[chainId],
+      hasProvider: !!(containerInjected.dependencies[chainId] && containerInjected.dependencies[chainId].provider)
+    }, 'Chain dependency check')
+
+    // Check if the chain has properly loaded dependencies (not just an empty object)
+    if (!containerInjected.dependencies[chainId] || !containerInjected.dependencies[chainId].provider) {
+      // If the requested chain is not supported or not properly configured, throw an error
+      throw new Error(`Unknown chain id: ${chainId}. Make sure you have WEB3_RPC_${chainId} configured in your .env file. Loaded chains: ${loadedChains.join(', ')}`)
     }
 
     const dependencies = containerInjected.dependencies[chainId]!
@@ -127,6 +159,8 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
     }
 
     // Create router
+    log.info({ chainId, hasProvider: !!dependencies.provider }, 'Creating AlphaRouter')
+    
     const router = new AlphaRouter({
       chainId,
       provider: dependencies.provider,
@@ -146,6 +180,8 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
       tokenPropertiesProvider: dependencies.tokenPropertiesProvider,
       simulator: dependencies.simulator,
     })
+
+    log.info('AlphaRouter created successfully')
 
     return {
       id: requestId,
