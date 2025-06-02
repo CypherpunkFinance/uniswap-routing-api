@@ -30,7 +30,7 @@ let quoteHandler: LocalQuoteHandler
 async function initializeHandlers() {
   try {
     const quoteInjectorPromise = new LocalQuoteHandlerInjector('localQuoteInjector', database).build()
-    quoteHandler = new LocalQuoteHandler('quote', quoteInjectorPromise)
+    quoteHandler = new LocalQuoteHandler(quoteInjectorPromise)
     log.info('Quote handler initialized successfully')
   } catch (error) {
     log.fatal({ error }, 'Fatal error initializing handlers')

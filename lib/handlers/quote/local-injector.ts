@@ -1,6 +1,6 @@
 import { ChainId } from '@uniswap/sdk-core'
 import { AlphaRouter, AlphaRouterConfig, IMetric, IRouter, MetricLoggerUnit } from '@uniswap/smart-order-router'
-import { default as bunyan, default as Logger } from 'bunyan'
+import { default as Logger } from 'bunyan'
 import { RequestInjected, LocalInjectorSOR } from '../local-injector-sor'
 import { QuoteQueryParams } from './schema/quote-schema'
 import { SQLiteDatabase } from '../../database/sqlite-database'
@@ -17,21 +17,13 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
     _event: any,
     context: any,
     log: Logger,
-    metrics: any
+    _metrics: any
   ): Promise<RequestInjected<IRouter<AlphaRouterConfig>>> {
     const requestId = context.awsRequestId
 
     const {
       tokenInChainId,
       tokenOutChainId,
-      tokenInAddress,
-      tokenOutAddress,
-      amount,
-      type,
-      recipient,
-      slippageTolerance,
-      deadline,
-      algorithm,
       quoteSpeed,
       intent,
     } = requestQueryParams

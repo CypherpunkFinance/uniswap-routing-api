@@ -1,21 +1,6 @@
-import { FallbackHandler } from './FallbackHandler'
-
-import { default as bunyan, default as Logger } from 'bunyan'
-
-const log: Logger = bunyan.createLogger({
-  name: 'Root',
-  serializers: bunyan.stdSerializers,
-  level: bunyan.ERROR,
-})
-
-let fallbackHandler: FallbackHandler
-try {
-  fallbackHandler = new FallbackHandler(log)
-} catch (error) {
-  log.fatal({ error }, 'Unable to construct FallbackHandler')
-  throw error
-}
+// Export any remaining RPC handlers here
+// FallbackHandler was removed as it depends on AWS services
 
 module.exports = {
-  fallbackHandler: fallbackHandler.handler,
+  // fallbackHandler was removed as it depends on AWS services
 }

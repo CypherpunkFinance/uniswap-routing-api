@@ -1,6 +1,6 @@
-import BaseJoi from '@hapi/joi'
-import { SUPPORTED_CHAINS } from '../../injector-sor'
+import { SUPPORTED_CHAINS } from '../../local-injector-sor'
 import { HooksOptions } from '@uniswap/smart-order-router'
+import BaseJoi from '@hapi/joi'
 
 const Joi = BaseJoi.extend((joi) => ({
   base: joi.array(),

@@ -93,8 +93,6 @@ export const SUPPORTED_CHAINS: ChainId[] = [
   ChainId.SONEIUM,
 ]
 
-const DEFAULT_TOKEN_LIST = 'https://gateway.ipfs.io/ipns/tokens.uniswap.org'
-
 export interface RequestInjected<Router> extends BaseRInj {
   chainId: ChainId
   metric: IMetric
@@ -259,7 +257,6 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
           const tokenProvider = new CachingTokenProviderWithFallback(
             chainId,
             tokenCache,
-            tokenListProvider,
             new TokenProvider(chainId, multicall2Provider)
           )
 
@@ -376,7 +373,7 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
   private async createV4SubgraphProvider(
     chainId: ChainId,
     poolProvider: IV4PoolProvider,
-    poolParams: Array<[number, number, string]>
+    _poolParams: Array<[number, number, string]>
   ): Promise<IV4SubgraphProvider> {
     return new StaticV4SubgraphProvider(chainId, poolProvider)
   }
@@ -385,8 +382,8 @@ export abstract class LocalInjectorSOR<Router, QueryParams> extends Injector<
     return new StaticV3SubgraphProvider(chainId, poolProvider)
   }
 
-  private async createV2SubgraphProvider(chainId: ChainId, poolProvider: IV2PoolProvider): Promise<IV2SubgraphProvider> {
-    return new StaticV2SubgraphProvider(chainId, poolProvider)
+  private async createV2SubgraphProvider(chainId: ChainId, _poolProvider: IV2PoolProvider): Promise<IV2SubgraphProvider> {
+    return new StaticV2SubgraphProvider(chainId)
   }
 
   private createGasPriceProvider(chainId: ChainId, provider: StaticJsonRpcProvider): IGasPriceProvider {

@@ -5,10 +5,10 @@ import { RequestInjected, LocalInjectorSOR } from '../local-injector-sor'
 import { QuoteQueryParams } from './schema/quote-schema'
 import { SQLiteDatabase } from '../../database/sqlite-database'
 import { QuoteResponse } from '../schema'
+import { RoutingApiSimulationStatus } from './util/simulation'
 
 export class LocalQuoteHandler {
   constructor(
-    private name: string,
     private injectorPromise: Promise<LocalQuoteHandlerInjector>
   ) {}
 
@@ -32,7 +32,7 @@ export class LocalQuoteHandler {
     const mockMetrics = {}
 
     try {
-      const requestInjected = await injector.getRequestInjected(
+      await injector.getRequestInjected(
         containerInjected,
         undefined,
         queryParams,
@@ -42,24 +42,27 @@ export class LocalQuoteHandler {
         mockMetrics
       )
 
-      const { router } = requestInjected
-      
       // Here you would implement the actual quote logic
       // For now, return a basic structure
       return {
+        quoteId: Math.random().toString(36),
+        amount: '0',
+        amountDecimals: '18',
         quote: '0',
-        quoteDecimals: 18,
+        quoteDecimals: '18',
         quoteGasAdjusted: '0',
-        quoteGasAdjustedDecimals: 18,
+        quoteGasAdjustedDecimals: '18',
         gasUseEstimate: '150000',
         gasUseEstimateQuote: '0',
-        gasUseEstimateQuoteDecimals: 18,
+        gasUseEstimateQuoteDecimals: '18',
         gasUseEstimateUSD: '0',
         gasPriceWei: '20000000000',
         route: [],
+        routeString: '[]',
         blockNumber: '0',
         methodParameters: undefined,
-        hitsCachedRoute: false,
+        hitsCachedRoutes: false,
+        simulationStatus: 'NotSupported' as RoutingApiSimulationStatus,
       } as QuoteResponse
 
     } catch (error) {
@@ -84,7 +87,7 @@ export class LocalQuoteHandlerInjector extends LocalInjectorSOR<IRouter<AlphaRou
     _event: any,
     context: any,
     log: Logger,
-    metrics: any
+    _metrics: any
   ): Promise<RequestInjected<IRouter<AlphaRouterConfig>>> {
     const requestId = context.awsRequestId
 
